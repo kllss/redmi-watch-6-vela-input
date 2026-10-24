@@ -1,0 +1,23 @@
+<script>
+/**
+ * app.ux — 全局入口
+ * 只做生命周期打点，方便判断应用是否被系统正常拉起/切后台。
+ */
+export default {
+  onCreate() {
+    console.log('[probe] app onCreate')
+  },
+  onShow() {
+    console.log('[probe] app onShow')
+  },
+  onHide() {
+    console.log('[probe] app onHide')
+  },
+  onDestroy() {
+    console.log('[probe] app onDestroy')
+  },
+  onError(e) {
+    console.log('[probe] app onError ' + e)
+  }
+}
+</script>

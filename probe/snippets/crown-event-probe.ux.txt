@@ -1,0 +1,85 @@
+# 可选实验页：探测是否存在"表冠旋转"组件事件
+#
+# 说明：
+# 1) 该事件名来自"快应用（安卓）手表规范" watchdoc.quickapp.cn，
+#    在 Xiaomi Vela 官方文档 / SDK feature 白名单中均未出现。
+# 2) 本文件故意不放进 router，避免主探针工程因未知事件名编译失败。
+# 3) 用法：把本文件改名为 pages/Crown/index.ux，在 manifest.json 的 router.pages
+#    里加 "Crown": { "component": "index", "path": "/crown" }，
+#    再把 router.entry 改成 "Crown"，重新打包单独验证。
+# 4) 判读：
+#    - 编译报"未知事件/不支持的事件" → Vela 编译期就不认这个事件（强证据：不存在）
+#    - 编译通过但旋转表冠无任何日志 → 运行期不派发（较强证据：不存在）
+#    - 有日志 → 找到隐藏事件，记录字段并回报（重大发现）
+
+<template>
+  <div class="page">
+    <div id="crownBox" class="box" @crownrotationchanged="onCrown">
+      <text class="t">Crown Event Probe</text>
+      <text class="t2">{{msg}}</text>
+    </div>
+    <text class="t3">旋转表冠 / 按压表冠，观察上方是否变化</text>
+  </div>
+</template>
+
+<script>
+export default {
+  private: {
+    msg: 'no event yet'
+  },
+  onReady() {
+    // 两种聚焦写法都试：Vela 文档只有 focus()，watchdoc 规范是 requestFocus(true)
+    const el = this.$element('crownBox')
+    if (el && el.requestFocus) {
+      try { el.requestFocus(true) } catch (e) {}
+    }
+    if (el && el.focus) {
+      try { el.focus({ focus: true }) } catch (e) {}
+    }
+    console.log('[crown] ready')
+  },
+  onCrown(ev) {
+    this.msg = JSON.stringify(ev)
+    console.log('[crown] EVENT ' + JSON.stringify(ev))
+  },
+  onBackPress() {
+    console.log('[crown] onBackPress')
+    return true
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #000000;
+}
+.box {
+  width: 90%;
+  height: 160px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border-width: 1px;
+  border-color: #ff3b30;
+  border-radius: 12px;
+}
+.t {
+  font-size: 16px;
+  color: #ffffff;
+}
+.t2 {
+  font-size: 10px;
+  color: #8ee08e;
+  margin-top: 8px;
+}
+.t3 {
+  font-size: 10px;
+  color: #9a9aa0;
+  margin-top: 10px;
+}
+</style>

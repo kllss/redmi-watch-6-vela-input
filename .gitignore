@@ -1,0 +1,20 @@
+# 依赖与构建产物
+node_modules/
+dist/
+build/
+.temp*/
+.temp_*
+
+# 签名材料：绝对不要提交
+sign/
+*.pem
+*.p12
+*.jks
+certificate.pem
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

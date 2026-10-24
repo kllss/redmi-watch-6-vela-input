@@ -1,0 +1,1163 @@
+<template>
+  <div class="page">
+
+    <!-- ================= 主页面 ================= -->
+    <div class="main" if="{{mainOn}}">
+      <div class="hud" style="height: {{lay.hudH}}px">
+        <text class="title" style="font-size: {{lay.title}}px">输入探针 v2.0</text>
+        <text class="sub" style="font-size: {{lay.sub}}px">{{status}}</text>
+      </div>
+
+      <div class="row" style="height: {{lay.rowH}}px">
+        <div class="btn" style="height: {{lay.btnH}}px" onclick="vibrateShort"><text class="btn-t" style="font-size: {{lay.btn}}px">振动 short</text></div>
+        <div class="btn" style="height: {{lay.btnH}}px" onclick="vibrateLong"><text class="btn-t" style="font-size: {{lay.btn}}px">振动 long</text></div>
+        <div class="btn" style="height: {{lay.btnH}}px" onclick="tryVibratorStart"><text class="btn-t" style="font-size: {{lay.btn}}px">start 参数</text></div>
+      </div>
+
+      <div class="row" style="height: {{lay.rowH}}px">
+        <div class="btn" style="height: {{lay.btnH}}px" onclick="toggleAccel"><text class="btn-t" style="font-size: {{lay.btn}}px">加速度</text></div>
+        <div class="btn" style="height: {{lay.btnH}}px" onclick="toggleCompass"><text class="btn-t" style="font-size: {{lay.btn}}px">罗盘</text></div>
+        <div class="btn" style="height: {{lay.btnH}}px" onclick="probeHealth"><text class="btn-t" style="font-size: {{lay.btn}}px">health</text></div>
+      </div>
+
+      <div class="row" style="height: {{lay.rowH}}px">
+        <div class="btn" style="height: {{lay.btnH}}px" onclick="probeGyro"><text class="btn-t" style="font-size: {{lay.btn}}px">陀螺仪</text></div>
+        <div class="btn" style="height: {{lay.btnH}}px" onclick="listSensors"><text class="btn-t" style="font-size: {{lay.btn}}px">传感器表</text></div>
+        <div class="btn" style="height: {{lay.btnH}}px" onclick="probeLight"><text class="btn-t" style="font-size: {{lay.btn}}px">环境光</text></div>
+      </div>
+
+      <text class="hint" style="font-size: {{lay.hint}}px">下方滚动区：只用表冠滚，别用手指</text>
+
+      <scroll id="crownScroll" class="probe" scroll-y="true"
+              onscroll="onProbeScroll"
+              ontouchstart="onProbeTouchStart"
+              ontouchend="onProbeTouchEnd">
+        <div class="spacer"></div>
+        <div class="item" for="{{items}}">
+          <text class="item-t" style="font-size: {{lay.item}}px">{{$item}}</text>
+        </div>
+        <div class="spacer"></div>
+      </scroll>
+
+      <div class="bigbtn" style="height: {{lay.bigH}}px" onclick="runAll">
+        <text class="big-t" style="font-size: {{lay.big}}px">{{runLabel}}</text>
+      </div>
+
+      <div class="logbar" style="height: {{lay.logbarH}}px">
+        <text class="sub" style="font-size: {{lay.sub}}px">日志</text>
+        <div class="mini" style="height: {{lay.miniH}}px" onclick="clearLog"><text class="mini-t" style="font-size: {{lay.mini}}px">清空</text></div>
+        <div class="mini hot" style="height: {{lay.miniH}}px" onclick="showSum"><text class="mini-t" style="font-size: {{lay.mini}}px">看汇总</text></div>
+        <div class="mini" style="height: {{lay.miniH}}px" onclick="toggleBack"><text class="mini-t" style="font-size: {{lay.mini}}px">拦截</text></div>
+      </div>
+
+      <scroll class="logbox" scroll-y="true">
+        <div for="{{logs}}">
+          <text class="log" style="font-size: {{lay.log}}px">{{$item}}</text>
+        </div>
+      </scroll>
+    </div>
+
+    <!-- ================= 汇总页（拍照回传用） ================= -->
+    <div class="sum" if="{{sumOn}}">
+      <text class="sum-title" style="font-size: {{lay.sumTitle}}px">结果汇总 v2.0</text>
+      <text class="sum-sub" style="font-size: {{lay.sumSub}}px">表冠可滚动看详情</text>
+      <scroll class="sumbox" scroll-y="true">
+        <div for="{{sum}}">
+          <text class="sum-line" style="height: {{lay.lineH}}px; font-size: {{lay.lineF}}px">{{$item}}</text>
+        </div>
+        <div class="gap"></div>
+        <div for="{{detail}}">
+          <text class="det" style="font-size: {{lay.det}}px">{{$item}}</text>
+        </div>
+        <div class="gap"></div>
+        <text class="sum-code" style="font-size: {{lay.code}}px">CODE {{code}}</text>
+      </scroll>
+      <div class="backbtn" onclick="closeSum"><text class="btn-t" style="font-size: {{lay.btn}}px">返回</text></div>
+    </div>
+
+  </div>
+</template>
+
+<script>
+import sensor from '@system.sensor'
+import vibrator from '@system.vibrator'
+import event from '@system.event'
+import device from '@system.device'
+
+export default {
+  private: {
+    status: '初始化…',
+    logs: [],
+    items: [],
+    sum: [],
+    detail: [],
+    code: '…',
+    mainOn: true,
+    sumOn: false,
+    scrollY: 0,
+    armed: false,
+    touchActive: false,
+    crownTicks: 0,
+    crownDelta: 0,
+    crownUp: 0,
+    crownDown: 0,
+    accFirst: '—',
+    accLast: '—',
+    accHz: '—',
+    accT0: 0,
+    compFirst: '—',
+    compLast: '—',
+    compAcc: '—',
+    healthKeys: '—',
+    devFull: '—',
+    vibStart: '—',
+    vibDefault: '—',
+    runLabel: '一键全测（约 10 秒）',
+    running: false,
+    firstCrownDy: '—',
+    basePending: true,
+    healthTypes: '—',
+    healthAvail: '—',
+    compMin: 999,
+    compMax: -999,
+    brandName: '—',
+    modelName: '—',
+    osName: '—',
+    apiNum: '—',
+    screenW: 0,
+    screenH: 0,
+    shape: '—',
+    accelOn: false,
+    compassOn: false,
+    accelCount: 0,
+    compassCount: 0,
+    gyroCount: 0,
+    lightCount: 0,
+    backConsume: true,
+    backHit: 0,
+    res: {
+      dev: '—', api: '—', can: '—', dtypes: '—',
+      gyro: '—', acc: '—', comp: '—', light: '—',
+      step: '—', health: '—', vib: '—'
+    }
+  },
+
+  onInit() {
+    const arr = []
+    for (let i = 1; i <= 40; i++) {
+      arr.push('item ' + i)
+    }
+    this.items = arr
+    this.log('onInit')
+
+    const cs = this.can('@system.sensor')
+    const cv = this.can('@system.vibrator')
+    const ce = this.can('@system.event')
+    this.res.can = 's' + this.yn(cs) + 'v' + this.yn(cv) + 'e' + this.yn(ce)
+    this.log('canIUse sensor=' + cs + ' vibrator=' + cv + ' event=' + ce)
+
+    this.res.dtypes = this.dtCount()
+    this.log('typeof gyro=' + typeof sensor.subscribeGyroscope +
+             ' | DATA_TYPES=' + this.dtKeys())
+  },
+
+  onReady() {
+    this.log('onReady')
+    device.getInfo({
+      success: (r) => {
+        this.status = r.brand + ' ' + r.model + ' / API' + r.APILevel
+        this.res.dev = r.model
+        this.res.api = 'A' + r.APILevel
+        this.brandName = r.brand
+        this.modelName = r.model
+        this.osName = r.osVersionName
+        this.apiNum = r.APILevel
+        this.screenW = r.screenWidth
+        this.screenH = r.screenHeight
+        this.shape = r.screenShape
+        this.devFull = 'D1 brand=' + r.brand + ' model=' + r.model + ' os=' + r.osVersionName +
+                       ' API=' + r.APILevel + ' ' + r.screenWidth + 'x' + r.screenHeight +
+                       ' ' + r.screenShape + ' ' + r.deviceType
+        const W = Number(r.screenWidth) || 432
+        const H = Number(r.screenHeight) || 514
+        const k = 432 / W
+        const dv = (v) => Math.max(1, Math.round(v * k))
+        const lhDev = Math.max(18, Math.floor(H * 0.66 / 12))
+        this.scr = W + 'x' + H
+        this.ui = (W < 300) ? 's' : (W >= 460 ? 'l' : 'm')
+        this.lay = {
+          hudH: dv(40), title: dv(16), sub: dv(10),
+          rowH: dv(38), btnH: dv(36), btn: dv(12), hint: dv(10),
+          logbarH: dv(26), miniH: dv(20), mini: dv(9),
+          bigH: dv(34), big: dv(13), item: dv(11), log: dv(9),
+          sumTitle: dv(17), sumSub: dv(10),
+          lineH: dv(lhDev), lineF: dv(Math.round(lhDev * 0.56)), det: dv(9), code: dv(8)
+        }
+        this.log('layout W=' + W + ' H=' + H + ' k=' + (Math.round(k * 100) / 100) +
+                 ' lineH=' + this.lay.lineH + ' lineF=' + this.lay.lineF)
+      },
+      fail: (d, c) => this.log('device.getInfo fail code=' + c)
+    })
+
+    const sc = this.$element('crownScroll')
+    if (sc && sc.scrollTo) {
+      sc.scrollTo({ top: 800, behavior: 'instant' })
+    }
+
+    setTimeout(() => {
+      this.scrollY = 800
+      this.armed = true
+      this.basePending = true
+      this.log('probe armed（可以转表冠）')
+    }, 800)
+
+    this.subBattery()
+  },
+
+  onShow() {
+    this.log('onShow')
+  },
+
+  onHide() {
+    this.log('onHide')
+  },
+
+  onDestroy() {
+    this.log('onDestroy')
+    try { sensor.unsubscribeAccelerometer() } catch (e) {}
+    try { sensor.unsubscribeCompass() } catch (e) {}
+    try { sensor.unsubscribeLight() } catch (e) {}
+  },
+
+  /**
+   * 唯一公开的实体按键入口：返回键 / 右滑返回。
+   * return true 表示应用自己消费，不再执行系统返回。
+   */
+  onBackPress() {
+    this.backHit++
+    this.log('*** onBackPress 触发（实体返回键或右滑）')
+    if (this.backConsume) {
+      this.log('=> 已被应用消费（pause 语义）')
+      return true
+    }
+    return false
+  },
+
+  yn(v) {
+    return (v === true) ? '1' : (v === false ? '0' : '?')
+  },
+
+  can(name) {
+    if (typeof this.$canIUse !== 'function') {
+      return 'n/a'
+    }
+    try {
+      return this.$canIUse(name)
+    } catch (e) {
+      return 'err'
+    }
+  },
+
+  dtKeys() {
+    try {
+      if (sensor.DATA_TYPES) {
+        return Object.keys(sensor.DATA_TYPES).join(',')
+      }
+    } catch (e) {}
+    return 'none'
+  },
+
+  dtCount() {
+    try {
+      if (sensor.DATA_TYPES) {
+        return 'n' + Object.keys(sensor.DATA_TYPES).length
+      }
+    } catch (e) {}
+    return 'NO'
+  },
+
+  log(msg) {
+    const t = new Date()
+    const hh = ('0' + t.getHours()).slice(-2)
+    const mm = ('0' + t.getMinutes()).slice(-2)
+    const ss = ('0' + t.getSeconds()).slice(-2)
+    const line = hh + ':' + mm + ':' + ss + '  ' + msg
+    console.log('[probe] ' + line)
+    const next = [line].concat(this.logs)
+    if (next.length > 80) {
+      next.length = 80
+    }
+    this.logs = next
+  },
+
+  clearLog() {
+    this.logs = []
+    this.log('log cleared')
+  },
+
+  toggleBack() {
+    this.backConsume = !this.backConsume
+    this.log('backConsume=' + this.backConsume)
+  },
+
+  // ---------- 表冠：借 scroll 事件间接观测 ----------
+  onProbeTouchStart() {
+    this.touchActive = true
+    this.log('probe touchstart')
+  },
+
+  onProbeTouchEnd() {
+    this.log('probe touchend')
+    setTimeout(() => {
+      this.touchActive = false
+      this.scrollY = this.readScrollY()
+    }, 700)
+  },
+
+  onProbeScroll(e) {
+    const y = (e && typeof e.scrollY === 'number') ? e.scrollY : 0
+    const dy = y - this.scrollY
+    this.scrollY = y
+    if (!this.armed || this.touchActive || dy === 0) {
+      return
+    }
+    if (this.basePending) {
+      this.basePending = false
+      this.firstCrownDy = 'base' + dy
+      this.log('crown baseline reset, first raw dy=' + dy)
+      return
+    }
+    this.crownTicks++
+    this.crownDelta += dy
+    if (this.crownTicks === 1) {
+      this.firstCrownDy = String(dy)
+    }
+    if (dy > 0) {
+      this.crownUp += dy
+    } else {
+      this.crownDown += dy
+    }
+    if (this.crownTicks % 3 === 1) {
+      this.log('SCROLL(no touch) dy=' + dy + ' total=' + this.crownDelta + ' ticks=' + this.crownTicks)
+    }
+  },
+
+  readScrollY() {
+    return this.scrollY
+  },
+
+  onSliderChange(e) {
+    this.log('slider change ' + JSON.stringify(e))
+  },
+
+  // ================= 汇总 =================
+  showSum() {
+    if (this.running) {
+      return
+    }
+    // 还没测过就直接看汇总 → 自动跑一遍，避免按错按钮拿到一堆 "—"
+    if (this.res.acc === '—' && this.res.gyro === '—' && this.res.comp === '—') {
+      this.log('尚未测试，自动开始全测')
+      this.runAll()
+      return
+    }
+    const r = this.res
+    const crown = (this.crownTicks > 0)
+      ? ('t' + this.crownTicks + ' d' + this.crownDelta)
+      : 't0'
+    const back = (this.backHit > 0) ? ('Y' + this.backHit) : 'N'
+    this.sum = [
+      '1  DEV   ' + r.dev + ' ' + r.api,
+      '2  GYRO  ' + r.gyro,
+      '3  ACC   ' + r.acc,
+      '4  COMP  ' + r.comp,
+      '5  LIGHT ' + r.light,
+      '6  STEP  ' + r.step,
+      '7  HLTH  ' + r.health,
+      '8  VIB   ' + r.vib,
+      '9  CROWN ' + crown,
+      '10 BACK  ' + back,
+      '11 CAN   ' + r.can,
+      '12 DTYPE ' + r.dtypes
+    ]
+    this.code = this.buildCode()
+    this.detail = [
+      this.devFull + ' | ui=' + this.ui + ' ' + this.scr,
+      'D2 DTYPES=' + this.dtKeys(),
+      'D3 HEALTH=' + this.healthKeys,
+      'D4 ACC n=' + this.accelCount + ' hz=' + this.accHz +
+        ' first=' + this.accFirst + ' last=' + this.accLast,
+      'D5 COMP n=' + this.compassCount + ' first=' + this.compFirst +
+        ' last=' + this.compLast + ' acc=' + this.compAcc +
+        ' range=' + this.compMin + '..' + this.compMax,
+      'D6 VIB start=' + this.vibStart + ' default=' + this.vibDefault,
+      'D7 CROWN up=' + this.crownUp + ' down=' + this.crownDown +
+        ' 1st=' + this.firstCrownDy + ' n=' + this.crownTicks,
+      'D8 GYRO n=' + this.gyroCount + ' LIGHT n=' + this.lightCount,
+      'D9 HTYPES=' + this.healthTypes + ' avail=' + this.healthAvail
+    ]
+    this.mainOn = false
+    this.sumOn = true
+    this.log('summary built')
+  },
+
+  buildCode() {
+    const r = this.res
+    return (r.gyro + '|' + r.acc + '|' + r.comp + '|' + r.light + '|' +
+            r.step + '|' + r.health + '|' + r.vib + '|' +
+            this.crownTicks + '|' + this.backHit)
+  },
+
+  closeSum() {
+    this.sumOn = false
+    this.mainOn = true
+  },
+
+  // ================= 一键全测 =================
+  runAll() {
+    if (this.running) {
+      return
+    }
+    this.running = true
+    this.runLabel = '测试中…约 10 秒'
+    this.log('=== AUTO TEST START ===')
+    this.res.gyro = '—'
+    this.res.acc = '—'
+    this.res.comp = '—'
+    this.res.light = '—'
+    this.res.step = '—'
+    this.res.health = '—'
+    this.res.vib = '—'
+    this.accelCount = 0
+    this.compassCount = 0
+    this.compMin = 999
+    this.compMax = -999
+    this.gyroCount = 0
+    this.lightCount = 0
+
+    this.autoGyro()
+
+    setTimeout(() => this.autoAccel(), 1600)
+    setTimeout(() => {
+      this.autoAccelResolve()
+      this.autoCompass()
+    }, 3700)
+    setTimeout(() => {
+      this.autoCompassResolve()
+      this.autoLight()
+    }, 5800)
+    setTimeout(() => {
+      this.autoLightResolve()
+      this.autoStep()
+    }, 7400)
+    setTimeout(() => this.autoHealth(), 8700)
+    setTimeout(() => this.autoVibrate(), 9600)
+    setTimeout(() => {
+      this.running = false
+      this.runLabel = '一键全测（约 10 秒）'
+      this.log('=== AUTO DONE ===')
+      this.showSum()
+    }, 10500)
+  },
+
+  autoGyro() {
+    const t = typeof sensor.subscribeGyroscope
+    this.log('auto gyro typeof=' + t)
+    if (t !== 'function') {
+      this.res.gyro = 'NOFN'
+      return
+    }
+    try {
+      sensor.subscribeGyroscope({
+        interval: 'game',
+        callback: (r) => { this.gyroCount++ },
+        fail: (m, c) => { this.res.gyro = 'FAIL' + c }
+      })
+    } catch (e) {
+      this.res.gyro = 'ERR'
+    }
+    setTimeout(() => {
+      if (this.res.gyro === '—') {
+        this.res.gyro = (this.gyroCount > 0) ? ('OK' + this.gyroCount) : 'NONE'
+      }
+      try {
+        if (typeof sensor.unsubscribeGyroscope === 'function') {
+          sensor.unsubscribeGyroscope()
+        }
+      } catch (e) {}
+      this.log('gyro resolved=' + this.res.gyro)
+    }, 1400)
+  },
+
+  autoAccel() {
+    this.log('auto accel')
+    this.accT0 = Date.now()
+    if (typeof sensor.subscribeAccelerometer !== 'function') {
+      this.res.acc = 'NOFN'
+      return
+    }
+    try {
+      sensor.subscribeAccelerometer({
+        interval: 'ui',
+        callback: (r) => {
+          this.accelCount++
+          this.accLast = this.f3(r)
+          if (this.accelCount === 1) {
+            this.accFirst = this.accLast
+            this.log('accel first ' + this.accFirst)
+          }
+        },
+        fail: (m, c) => { this.res.acc = 'FAIL' + c }
+      })
+    } catch (e) {
+      this.res.acc = 'ERR'
+    }
+  },
+
+  autoAccelResolve() {
+    if (this.res.acc === '—') {
+      this.res.acc = (this.accelCount > 0) ? ('OK' + this.accelCount) : 'NONE'
+    }
+    const ms = Date.now() - this.accT0
+    this.accHz = (ms > 0) ? (Math.round(this.accelCount * 10000 / ms) / 10) : '0'
+    if (this.accFirst !== '—' && this.accFirst === this.accLast) {
+      this.res.acc += '/FROZEN'
+    }
+    try { sensor.unsubscribeAccelerometer() } catch (e) {}
+    this.log('accel resolved=' + this.res.acc + ' hz=' + this.accHz +
+             ' first=' + this.accFirst + ' last=' + this.accLast)
+  },
+
+  f3(r) {
+    try {
+      return Number(r.x).toFixed(2) + ',' + Number(r.y).toFixed(2) + ',' + Number(r.z).toFixed(2)
+    } catch (e) {
+      return String(r && r.x)
+    }
+  },
+
+  autoCompass() {
+    this.log('auto compass')
+    if (typeof sensor.subscribeCompass !== 'function') {
+      this.res.comp = 'NOFN'
+      return
+    }
+    try {
+      sensor.subscribeCompass({
+        callback: (r) => {
+          this.compassCount++
+          const dv = Number(r.direction)
+          if (dv < this.compMin) { this.compMin = dv }
+          if (dv > this.compMax) { this.compMax = dv }
+          const d = dv.toFixed(2)
+          this.compLast = d
+          if (this.compassCount === 1) {
+            this.compFirst = d
+            this.log('compass first dir=' + d + ' acc=' + r.accuracy)
+          }
+          this.compAcc = String(r.accuracy)
+        },
+        fail: (d, c) => { this.res.comp = 'FAIL' + c }
+      })
+    } catch (e) {
+      this.res.comp = 'ERR'
+    }
+  },
+
+  autoCompassResolve() {
+    if (this.res.comp === '—') {
+      this.res.comp = (this.compassCount > 0) ? ('OK' + this.compassCount) : 'NONE'
+    }
+    try { sensor.unsubscribeCompass() } catch (e) {}
+    this.log('comp resolved=' + this.res.comp)
+  },
+
+  autoLight() {
+    this.log('auto light')
+    if (typeof sensor.subscribeLight !== 'function') {
+      this.res.light = 'NOFN'
+      return
+    }
+    try {
+      sensor.subscribeLight({
+        callback: (r) => {
+          this.lightCount++
+          if (this.lightCount === 1) {
+            this.log('light first ' + JSON.stringify(r))
+          }
+        },
+        fail: (m, c) => { this.res.light = 'FAIL' + c }
+      })
+    } catch (e) {
+      this.res.light = 'ERR'
+    }
+  },
+
+  autoLightResolve() {
+    if (this.res.light === '—') {
+      this.res.light = (this.lightCount > 0) ? ('OK' + this.lightCount) : 'NONE'
+    }
+    try { sensor.unsubscribeLight() } catch (e) {}
+    this.log('light resolved=' + this.res.light)
+  },
+
+  autoStep() {
+    this.log('auto step')
+    if (typeof sensor.subscribeStepCounter !== 'function') {
+      this.res.step = 'NOFN'
+      return
+    }
+    try {
+      sensor.subscribeStepCounter({
+        callback: (r) => { this.res.step = 'OK' },
+        fail: (m, c) => { this.res.step = 'FAIL' + c }
+      })
+    } catch (e) {
+      this.res.step = 'ERR'
+    }
+    setTimeout(() => {
+      if (this.res.step === '—') { this.res.step = 'NONE' }
+      try { sensor.unsubscribeStepCounter() } catch (e) {}
+      this.log('step resolved=' + this.res.step)
+    }, 900)
+  },
+
+  autoHealth() {
+    this.log('auto health')
+    try {
+      const health = require('@service.health')
+      if (!health) {
+        this.res.health = 'EMPTY'
+        return
+      }
+      const keys = Object.keys(health)
+      this.res.health = (keys.length > 0) ? ('K' + keys.length) : 'EMPTY'
+      this.healthKeys = keys.join(',')
+      this.log('health keys=' + this.healthKeys)
+      try {
+        if (health.DATA_TYPES) {
+          const tk = Object.keys(health.DATA_TYPES)
+          this.healthTypes = tk.length ? tk.join(',') : 'EMPTY'
+          if (tk.length && typeof health.isAvailable === 'function') {
+            const probeType = health.DATA_TYPES[tk[0]]
+            this.healthAvail = String(health.isAvailable(probeType))
+            this.log('health isAvailable(' + tk[0] + ')=' + this.healthAvail)
+          }
+        } else {
+          this.healthTypes = 'NO'
+        }
+      } catch (e) {
+        this.healthTypes = 'ERR'
+      }
+      this.log('health types=' + this.healthTypes + ' avail=' + this.healthAvail)
+    } catch (e) {
+      this.res.health = 'NO'
+      this.log('health require err')
+    }
+  },
+
+  autoVibrate() {
+    this.log('auto vibrate')
+    this.vibStart = typeof vibrator.start
+    this.vibDefault = typeof vibrator.getSystemDefaultMode
+    if (typeof vibrator.vibrate !== 'function') {
+      this.res.vib = 'NOFN'
+      return
+    }
+    try {
+      vibrator.vibrate({ mode: 'short' })
+      this.res.vib = 'OK' + (typeof vibrator.start === 'function' ? '/S1' : '/S0')
+    } catch (e) {
+      this.res.vib = 'ERR'
+    }
+  },
+
+  // ================= 手工单项（保留） =================
+  vibrateShort() {
+    this.doVibrate('short')
+  },
+
+  vibrateLong() {
+    this.doVibrate('long')
+  },
+
+  doVibrate(mode) {
+    this.log('vibrate mode=' + mode + ' canIUse=' + this.can('@system.vibrator.vibrate'))
+    try {
+      vibrator.vibrate({ mode: mode })
+      this.res.vib = 'OK' + (typeof vibrator.start === 'function' ? '/S1' : '/S0')
+      this.log('vibrate() called')
+    } catch (e) {
+      this.log('vibrate err ' + (e && e.message ? e.message : e))
+    }
+  },
+
+  tryVibratorStart() {
+    this.log('typeof vibrator.start=' + typeof vibrator.start)
+    if (typeof vibrator.start !== 'function') {
+      this.log('=> start 不存在（与官方支持表一致）')
+      return
+    }
+    try {
+      vibrator.start({
+        duration: 300,
+        interval: 150,
+        count: 3,
+        success: (d) => this.log('start ok id=' + d.id),
+        fail: (d, c) => this.log('start fail code=' + c + ' ' + d)
+      })
+    } catch (e) {
+      this.log('start err ' + (e && e.message ? e.message : e))
+    }
+  },
+
+  toggleAccel() {
+    if (this.accelOn) {
+      try { sensor.unsubscribeAccelerometer() } catch (e) {}
+      this.accelOn = false
+      this.log('accel unsubscribed')
+      return
+    }
+    this.log('accel subscribe… canIUse=' + this.can('@system.sensor.subscribeAccelerometer'))
+    if (typeof sensor.subscribeAccelerometer !== 'function') {
+      this.log('=> subscribeAccelerometer 不存在')
+      this.res.acc = 'NOFN'
+      return
+    }
+    try {
+      sensor.subscribeAccelerometer({
+        interval: 'ui',
+        callback: (r) => {
+          this.accelCount++
+          if (this.accelCount % 10 === 1) {
+            this.log('accel #' + this.accelCount + ' x=' + r.x + ' y=' + r.y + ' z=' + r.z)
+          }
+        },
+        fail: (msg, code) => {
+          this.log('accel fail code=' + code + ' msg=' + msg)
+          this.res.acc = 'FAIL' + code
+        }
+      })
+      this.accelOn = true
+      this.log('accel subscribe called（若 3 秒无数据看 fail）')
+    } catch (e) {
+      this.log('accel err ' + (e && e.message ? e.message : e))
+    }
+  },
+
+  toggleCompass() {
+    if (this.compassOn) {
+      try { sensor.unsubscribeCompass() } catch (e) {}
+      this.compassOn = false
+      this.log('compass unsubscribed')
+      return
+    }
+    this.log('compass subscribe… canIUse=' + this.can('@system.sensor.subscribeCompass'))
+    if (typeof sensor.subscribeCompass !== 'function') {
+      this.log('=> subscribeCompass 不存在')
+      this.res.comp = 'NOFN'
+      return
+    }
+    try {
+      sensor.subscribeCompass({
+        callback: (r) => {
+          this.compassCount++
+          if (this.compassCount % 5 === 1) {
+            this.log('compass #' + this.compassCount + ' dir=' + r.direction + ' acc=' + r.accuracy)
+          }
+        },
+        fail: (d, c) => {
+          this.log('compass fail code=' + c + ' ' + d)
+          this.res.comp = 'FAIL' + c
+        }
+      })
+      this.compassOn = true
+      this.log('compass subscribe called（绕 8 字校准后看 dir 是否跟手）')
+    } catch (e) {
+      this.log('compass err ' + (e && e.message ? e.message : e))
+    }
+  },
+
+  probeGyro() {
+    const t = typeof sensor.subscribeGyroscope
+    this.log('gyro: typeof subscribeGyroscope=' + t)
+    if (t !== 'function') {
+      this.log('=> 方法不存在（与 openvela sensor_impl.cpp 一致）')
+      this.res.gyro = 'NOFN'
+      return
+    }
+    this.gyroCount = 0
+    try {
+      sensor.subscribeGyroscope({
+        interval: 'game',
+        callback: (r) => {
+          this.gyroCount++
+          if (this.gyroCount % 5 === 1) {
+            this.log('GYRO x=' + r.x + ' y=' + r.y + ' z=' + r.z)
+          }
+        },
+        fail: (m, c) => {
+          this.log('GYRO fail code=' + c + ' ' + m)
+          this.res.gyro = 'FAIL' + c
+        }
+      })
+      this.log('gyro subscribe called（2s 内无数据即无回调）')
+    } catch (e) {
+      this.log('gyro err ' + (e && e.message ? e.message : e))
+      this.res.gyro = 'ERR'
+    }
+    setTimeout(() => {
+      if (this.res.gyro === '—') {
+        this.res.gyro = (this.gyroCount > 0) ? ('OK' + this.gyroCount) : 'NONE'
+        this.log('gyro 2s 到 -> ' + this.res.gyro)
+      }
+      try {
+        if (typeof sensor.unsubscribeGyroscope === 'function') {
+          sensor.unsubscribeGyroscope()
+        }
+      } catch (e) {}
+    }, 2000)
+  },
+
+  listSensors() {
+    try {
+      const types = sensor.DATA_TYPES
+      if (!types) {
+        this.log('DATA_TYPES 不存在')
+        this.res.dtypes = 'NO'
+      } else {
+        const keys = Object.keys(types)
+        this.res.dtypes = 'n' + keys.length
+        this.log('DATA_TYPES keys=' + keys.join(','))
+        let line = ''
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i]
+          let ok = 'n/a'
+          if (typeof sensor.checkAvailable === 'function') {
+            try {
+              ok = sensor.checkAvailable(types[k])
+            } catch (e) {
+              ok = 'err'
+            }
+          }
+          line += k + '=' + ok + '  '
+        }
+        this.log('checkAvailable: ' + line)
+      }
+    } catch (e) {
+      this.log('DATA_TYPES err ' + (e && e.message ? e.message : e))
+    }
+
+    if (typeof sensor.subscribeStepCounter === 'function') {
+      try {
+        sensor.subscribeStepCounter({
+          callback: (r) => {
+            this.log('step cb ' + JSON.stringify(r))
+            this.res.step = 'OK'
+          },
+          fail: (m, c) => {
+            this.log('step fail code=' + c + ' ' + m)
+            this.res.step = 'FAIL' + c
+          }
+        })
+      } catch (e) {
+        this.log('step err ' + (e && e.message ? e.message : e))
+      }
+    } else {
+      this.log('subscribeStepCounter 不存在')
+      this.res.step = 'NOFN'
+    }
+  },
+
+  probeLight() {
+    this.log('light: typeof subscribeLight=' + typeof sensor.subscribeLight)
+    if (typeof sensor.subscribeLight !== 'function') {
+      this.log('=> 方法不存在')
+      this.res.light = 'NOFN'
+      return
+    }
+    this.lightCount = 0
+    try {
+      sensor.subscribeLight({
+        callback: (r) => {
+          this.lightCount++
+          if (this.lightCount % 5 === 1) {
+            this.log('LIGHT ' + JSON.stringify(r))
+          }
+        },
+        fail: (m, c) => {
+          this.log('light fail code=' + c + ' ' + m)
+          this.res.light = 'FAIL' + c
+        }
+      })
+      this.log('light subscribe called')
+    } catch (e) {
+      this.log('light err ' + (e && e.message ? e.message : e))
+      this.res.light = 'ERR'
+    }
+    setTimeout(() => {
+      if (this.res.light === '—') {
+        this.res.light = (this.lightCount > 0) ? ('OK' + this.lightCount) : 'NONE'
+      }
+    }, 1800)
+  },
+
+  probeHealth() {
+    this.log('health: require @service.health …')
+    try {
+      const health = require('@service.health')
+      if (!health) {
+        this.log('=> health 模块为空')
+        this.res.health = 'EMPTY'
+        return
+      }
+      const keys = Object.keys(health)
+      this.res.health = (keys.length > 0) ? ('K' + keys.length) : 'EMPTY'
+      this.log('health keys=' + keys.join(','))
+
+      let types = ['heart_rate']
+      if (health.DATA_TYPES && health.DATA_TYPES.HEART_RATE !== undefined) {
+        types = [health.DATA_TYPES.HEART_RATE]
+        this.log('DATA_TYPES.HEART_RATE=' + health.DATA_TYPES.HEART_RATE)
+      }
+
+      if (typeof health.getRecentSamples === 'function') {
+        health.getRecentSamples({
+          dataTypes: types,
+          success: (res) => this.log('health ok ' + JSON.stringify(res)),
+          fail: (d, c) => this.log('health fail code=' + c)
+        })
+      } else {
+        this.log('=> getRecentSamples 不存在')
+      }
+
+      if (typeof health.getTodaySteps === 'function') {
+        health.getTodaySteps({
+          success: (d) => this.log('steps=' + d.steps),
+          fail: (d, c) => this.log('steps fail code=' + c)
+        })
+      } else {
+        this.log('=> getTodaySteps 不存在')
+      }
+    } catch (e) {
+      this.log('health err ' + (e && e.message ? e.message : e))
+      this.res.health = 'NO'
+    }
+  },
+
+  subBattery() {
+    if (typeof event.subscribe !== 'function') {
+      this.log('event.subscribe 不存在')
+      return
+    }
+    try {
+      event.subscribe({
+        eventName: 'usual.event.BATTERY_CHANGED',
+        callback: (res) => this.log('BATTERY_CHANGED ' + JSON.stringify(res.params))
+      })
+      this.log('battery event subscribed')
+    } catch (e) {
+      this.log('event.subscribe err ' + (e && e.message ? e.message : e))
+    }
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  padding: 8px;
+  background-color: #0a0a0c;
+}
+
+.main {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+}
+
+.hud {
+  height: 40px;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.title {
+  font-size: 16px;
+  color: #ffffff;
+}
+
+.sub {
+  font-size: 11px;
+  color: #9a9aa0;
+}
+
+.row {
+  height: 38px;
+  flex-direction: row;
+  justify-content: space-between;
+  margin-top: 5px;
+}
+
+.btn {
+  width: 31%;
+  height: 36px;
+  border-radius: 10px;
+  background-color: #26262b;
+  justify-content: center;
+  align-items: center;
+}
+
+.btn-t {
+  font-size: 12px;
+  color: #ffffff;
+}
+
+.hint {
+  font-size: 10px;
+  color: #ff6b6b;
+  margin-top: 6px;
+  margin-bottom: 4px;
+}
+
+.probe {
+  width: 100%;
+  flex: 1.2;
+  background-color: #141418;
+  border-radius: 10px;
+}
+
+.spacer {
+  height: 240px;
+}
+
+.item {
+  height: 28px;
+  justify-content: center;
+  align-items: center;
+  border-bottom-width: 1px;
+  border-bottom-color: #222228;
+}
+
+.item-t {
+  font-size: 11px;
+  color: #cfcfd4;
+}
+
+.logbar {
+  height: 26px;
+  flex-direction: row;
+  align-items: center;
+  margin-top: 5px;
+}
+
+.mini {
+  height: 20px;
+  padding-left: 6px;
+  padding-right: 6px;
+  margin-left: 5px;
+  border-radius: 6px;
+  background-color: #26262b;
+  justify-content: center;
+  align-items: center;
+}
+
+.mini.hot {
+  background-color: #2f6b3a;
+}
+
+.mini-t {
+  font-size: 9px;
+  color: #ffffff;
+}
+
+.bigbtn {
+  width: 100%;
+  height: 34px;
+  margin-top: 6px;
+  border-radius: 10px;
+  background-color: #2f6b3a;
+  justify-content: center;
+  align-items: center;
+}
+
+.big-t {
+  font-size: 13px;
+  color: #ffffff;
+}
+
+.logbox {
+  flex: 1;
+  width: 100%;
+  background-color: #101014;
+  border-radius: 8px;
+  padding: 4px;
+  margin-top: 2px;
+}
+
+.log {
+  font-size: 9px;
+  color: #8ee08e;
+}
+
+/* ---------- 汇总页 ---------- */
+.sum {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  background-color: #000000;
+  padding: 4px;
+}
+
+.sum-title {
+  font-size: 17px;
+  color: #ffffff;
+}
+
+.sum-sub {
+  font-size: 10px;
+  color: #7a7a80;
+  margin-bottom: 6px;
+}
+
+.sumbox {
+  flex: 1;
+  width: 100%;
+  flex-direction: column;
+  margin-top: 4px;
+}
+
+.sum-line {
+  font-size: 15px;
+  color: #7cf07c;
+  height: 26px;
+}
+
+.det {
+  font-size: 10px;
+  color: #8fb8ff;
+  margin-top: 2px;
+}
+
+.gap {
+  height: 8px;
+}
+
+.backbtn {
+  height: 30px;
+  width: 100%;
+  border-radius: 8px;
+  background-color: #26262b;
+  justify-content: center;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.sum-code {
+  font-size: 9px;
+  color: #6a6a70;
+  margin-top: 4px;
+}
+</style>

@@ -1,0 +1,14 @@
+{
+  "name": "rw6-input-probe",
+  "version": "1.0.0",
+  "private": true,
+  "description": "REDMI Watch 6 (Vela RPK) hardware input capability probe: crown / key / sensor / vibrator",
+  "scripts": {
+    "start": "aiot start --watch",
+    "build": "aiot build",
+    "release": "aiot release"
+  },
+  "devDependencies": {
+    "aiot-toolkit": "^2.0.5"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "package": "com.probe.rw6input",
+  "name": "输入探针",
+  "icon": "/Common/icon.png",
+  "versionName": "2.0.0",
+  "versionCode": 6,
+  "minAPILevel": 1,
+  "deviceTypeList": [
+    "watch"
+  ],
+  "features": [
+    {
+      "name": "system.sensor"
+    },
+    {
+      "name": "system.vibrator"
+    },
+    {
+      "name": "system.event"
+    },
+    {
+      "name": "system.device"
+    },
+    {
+      "name": "service.health"
+    }
+  ],
+  "permissions": [],
+  "config": {
+    "logLevel": "debug",
+    "designWidth": 432
+  },
+  "router": {
+    "entry": "pages/Index",
+    "pages": {
+      "pages/Index": {
+        "component": "index",
+        "path": "/"
+      }
+    }
+  },
+  "display": {
+    "backgroundColor": "#000000"
+  }
+}
