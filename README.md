@@ -76,23 +76,70 @@ v1.4: n=24  first=1.87,7.58,5.85   last=-7.66,1.74,5.91   模长 9.76 / 9.83
 
 ---
 
+## 右滑返回能不能关掉（2026-10-25 追加）
+
+这是做任何手表应用都绕不开的问题：**系统级的"从左边往右滑 = 返回"能不能在应用里关掉？**
+
+四组包、三次对照实验，结论是**不能**：
+
+| 场景 | 实测结果 |
+|---|---|
+| 栈深度 2 + 无字段 | 右滑**弹回上一页** |
+| 栈深度 2 + `followHand: "disable"` | 右滑**照样弹回上一页** |
+| 栈深度 1 + 无字段 | 右滑**退出应用** |
+| 栈深度 1 + `followHand: "disable"` | 右滑**照样退出应用** |
+
+`followHand: "disable"`（vivo 手表文档里的页面级字段）在小米 Vela 上**编译不报错、manifest 原样保留、运行期被忽略**——编译器接受 ≠ 运行时生效。
+
+> **右滑返回无法用应用层手段关闭。栈深度 1 会退出应用，栈深度 ≥ 2 会弹回上一层。**
+
+这也意味着：**横滑不能当主操作**（会被系统吃掉），而要退出/暂停只能靠页面内的软件按钮；单页应用则必须把状态放在页面外（`globalThis` / storage），因为被弹出去时页面会直接销毁。
+
+完整的六节实验记录（含"为什么第一轮结论是错的"、守卫页方案、A/B 判读表、待补读数）见 [`docs/device-results-01-back-swipe.md`](docs/device-results-01-back-swipe.md)。
+
+---
+
 ## 仓库结构
 
 ```
 .
 ├── docs/
-│   ├── research-report.md            # 完整研究报告（能力矩阵 / 接口证据 / 测试用例 / 结论）
-│   ├── device-results-2026-10-24.md  # 四轮真机原始读数与判定
-│   └── how-to-collect-data.md        # 没有 adb 时怎么把数据从手表取回来
-├── probe/                            # 探针工程源码（Vela JS 应用）
-│   ├── README.md                     # 编译、安装、测试步骤
-│   ├── src/                          # manifest.json / app.ux / pages/Index/index.ux
+│   ├── research-report.md              # 完整研究报告（能力矩阵 / 接口证据 / 测试用例 / 结论）
+│   ├── device-results-2026-10-24.md    # 四轮输入探针的原始读数与判定
+│   ├── device-results-01-back-swipe.md # 右滑返回：四组包、三次对照实验
+│   └── how-to-collect-data.md          # 没有 adb 时怎么把数据从手表取回来
+├── probe/                              # 探针工程源码（Vela JS 应用）
+│   ├── README.md                       # 编译、安装、测试步骤
+│   ├── src/                            # manifest.json / app.ux / pages/Index/index.ux
 │   └── snippets/crown-event-probe.ux.txt
+├── experiments/                        # 后续的平台能力实验（同一套构建方式）
+│   ├── gesture-lab/                    # A→B 两页对照：followHand 拦不拦"弹回上一页"
+│   ├── guard-demo/                     # 守卫页 / 单页 / 单页关跟手，三包一组 A/B
+│   ├── storage-probe/                  # @system.storage 可用性、弹栈写盘、4KB 写耗时
+│   └── lib/png-icon.mjs                # 纯 Node 生成 PNG 图标（无第三方依赖）
 └── releases/
-    ├── probe-auto.rpk                # v2.0 自适应排版（含 health）
-    ├── probe-auto-lite.rpk           # v2.0 自适应排版（不含 health，通用）
-    └── probe-rw6-v1.4.rpk            # 最早一版，保留对照
+    ├── probe-auto.rpk                  # v2.0 自适应排版（含 health）
+    ├── probe-auto-lite.rpk             # v2.0 自适应排版（不含 health，通用）
+    ├── probe-rw6-v1.4.rpk              # 最早一版，保留对照
+    ├── probe-followhand-disable.rpk    # 单页 + followHand（第一轮，结论已作废）
+    ├── glab-1-control.rpk              # 两页对照：无字段
+    ├── glab-2-followhand.rpk           # 两页对照：B 页 followHand=disable
+    ├── guard-demo.rpk                  # 守卫页 + 游戏页（深度 2）
+    ├── guard-flat-control.rpk          # 单页对照（红叉）
+    ├── guard-flat-followhand.rpk       # 单页 + followHand（青箭头）
+    └── storage-probe.rpk               # 存档探针
 ```
+
+三个实验工程都用同一套 `build.mjs`：先复制 `src` 到 `.build/`，再按变体改 `manifest.json`（包名、路由表、`followHand`），最后调 `aiot-toolkit build`，产物直接落到 `data/local/`（已忽略）。
+
+```bash
+node experiments/gesture-lab/make-icons.mjs
+node experiments/gesture-lab/build.mjs
+
+node experiments/guard-demo/build.mjs
+AIOT_TOOLKIT_BIN=/path/to/aiot-toolkit/lib/bin.js node experiments/guard-demo/build.mjs
+```
+
 
 ---
 

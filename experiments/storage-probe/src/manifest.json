@@ -1,0 +1,33 @@
+{
+  "package": "com.klls.storeprobe",
+  "name": "存档探针",
+  "icon": "/Common/icon.png",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "minAPILevel": 1,
+  "deviceTypeList": [
+    "watch"
+  ],
+  "features": [
+    {
+      "name": "system.storage"
+    }
+  ],
+  "permissions": [],
+  "config": {
+    "logLevel": "debug",
+    "designWidth": 432
+  },
+  "router": {
+    "entry": "pages/Index",
+    "pages": {
+      "pages/Index": {
+        "component": "index",
+        "path": "/"
+      }
+    }
+  },
+  "display": {
+    "backgroundColor": "#000000"
+  }
+}

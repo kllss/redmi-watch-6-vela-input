@@ -1,0 +1,40 @@
+{
+  "package": "com.klls.guarddemo",
+  "name": "守卫页",
+  "icon": "/Common/icon.png",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "minAPILevel": 1,
+  "deviceTypeList": [
+    "watch"
+  ],
+  "features": [
+    {
+      "name": "system.storage"
+    },
+    {
+      "name": "system.router"
+    }
+  ],
+  "permissions": [],
+  "config": {
+    "logLevel": "debug",
+    "designWidth": 432
+  },
+  "router": {
+    "entry": "pages/Guard",
+    "pages": {
+      "pages/Guard": {
+        "component": "index",
+        "path": "/"
+      },
+      "pages/Game": {
+        "component": "index",
+        "path": "/game"
+      }
+    }
+  },
+  "display": {
+    "backgroundColor": "#000000"
+  }
+}

@@ -1,0 +1,23 @@
+<script>
+/**
+ * app.ux — 全局入口
+ * 只做生命周期打点，便于判断应用是否被系统切后台/退出。
+ */
+export default {
+  onCreate() {
+    console.log('[glab] app onCreate')
+  },
+  onShow() {
+    console.log('[glab] app onShow')
+  },
+  onHide() {
+    console.log('[glab] app onHide')
+  },
+  onDestroy() {
+    console.log('[glab] app onDestroy')
+  },
+  onError(e) {
+    console.log('[glab] app onError ' + e)
+  }
+}
+</script>

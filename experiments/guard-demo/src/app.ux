@@ -1,0 +1,22 @@
+<script>
+/**
+ * app.ux — 只做生命周期打点
+ */
+export default {
+  onCreate() {
+    console.log('[guard] app onCreate')
+  },
+  onShow() {
+    console.log('[guard] app onShow')
+  },
+  onHide() {
+    console.log('[guard] app onHide')
+  },
+  onDestroy() {
+    console.log('[guard] app onDestroy')
+  },
+  onError(e) {
+    console.log('[guard] app onError ' + e)
+  }
+}
+</script>

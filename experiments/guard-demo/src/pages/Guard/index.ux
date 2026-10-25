@@ -1,0 +1,311 @@
+<template>
+  <div class="page">
+
+    <text class="h1" style="font-size: 18px">已暂停</text>
+    <text class="sub" style="font-size: 11px">进度还在内存里，点下面继续</text>
+
+    <div class="card">
+      <div class="kv">
+        <text class="k" style="font-size: 11px">计数</text>
+        <text class="v" style="font-size: 14px">{{count}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">游戏页被创建</text>
+        <text class="v" style="font-size: 12px">{{inits}} 次</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">守卫页被显示</text>
+        <text class="v" style="font-size: 12px">{{shows}} 次</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">页面栈深度</text>
+        <text class="v" style="font-size: 12px">{{depth}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">共享方式</text>
+        <text class="v" style="font-size: 12px">{{sk}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">共享标记</text>
+        <text class="v" style="font-size: 12px">{{marks}}</text>
+      </div>
+    </div>
+
+    <div class="btn" onclick="resume">
+      <text class="btn-t" style="font-size: 15px">继续游戏</text>
+    </div>
+
+    <text class="save" style="font-size: 11px">{{savedAt}}</text>
+    <text class="note" style="font-size: 10px">这一页是栈底：从这里右滑不会退出应用</text>
+    <text class="note2" style="font-size: 10px">{{last}}</text>
+
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import storage from '@system.storage'
+
+/**
+ * 跨页面共享状态。
+ *
+ * 不能放在页面的 private 里：页面一被销毁就没了。
+ * 也不能靠 import 本地 .js 模块：实测编译产物里 "./src/store.js" 是一个空模块，
+ * 页面拿到的是 undefined（详见 tools/guard-demo/README.md）。
+ *
+ * 所以直接挂到运行时注入的 globalThis 上，key 加命名空间避免与系统冲突。
+ * 标记数组 marks 用来验证"两个页面看到的到底是不是同一个对象"。
+ */
+const STORE_KEY = '__klls_guard_store__'
+let localFallback = null
+
+function createStore() {
+  return {
+    count: 0,
+    gameInits: 0,
+    guardShows: 0,
+    entered: false,
+    restored: false,
+    inGame: false,
+    marks: []
+  }
+}
+
+/**
+ * 把 store 挂到宿主对象上，并"赋值后重新读取"确认真的挂上了。
+ * 有些运行时会把 global 对象冻结，赋值静默失败，直接 return host[KEY] 会拿到 undefined。
+ */
+function attach(host) {
+  if (!host) {
+    return null
+  }
+  if (!host[STORE_KEY]) {
+    try {
+      host[STORE_KEY] = createStore()
+    } catch (e) {}
+  }
+  return host[STORE_KEY] || null
+}
+
+function getStore() {
+  try {
+    const g = (typeof globalThis !== 'undefined') ? globalThis : null
+    const s = attach(g)
+    if (s) {
+      return s
+    }
+  } catch (e) {}
+  try {
+    const g = (typeof global !== 'undefined') ? global : null
+    const s = attach(g)
+    if (s) {
+      return s
+    }
+  } catch (e) {}
+  if (!localFallback) {
+    localFallback = createStore()
+  }
+  return localFallback
+}
+
+export default {
+  private: {
+    count: 0,
+    inits: 0,
+    shows: 0,
+    depth: 1,
+    last: '',
+    marks: '',
+    savedAt: '',
+    sk: ''
+  },
+
+  onInit() {
+    this.sk = (typeof globalThis !== 'undefined') ? 'globalThis' : '降级（页面内）'
+    this.restore()
+  },
+
+  onShow() {
+    const store = getStore()
+
+    store.guardShows = store.guardShows + 1
+    store.marks = store.marks.concat(['Q'])
+    if (store.marks.length > 12) {
+      store.marks = store.marks.slice(store.marks.length - 12)
+    }
+
+    this.shows = store.guardShows
+    this.count = store.count
+    this.inits = store.gameInits
+    this.marks = store.marks.join(' ')
+
+    // 从游戏页右滑回来：进程还活着，此刻写盘来得及
+    if (store.inGame) {
+      store.inGame = false
+      this.saveOnReturn(store)
+    }
+
+    this.depth = this.stackDepth()
+
+    // 首次启动自动进游戏；之后每次回到这里都停在暂停页，等玩家点
+    if (!store.entered) {
+      store.entered = true
+      this.last = '首次启动，自动进入游戏…'
+      setTimeout(() => {
+        this.resume()
+      }, 60)
+    } else {
+      this.last = '已暂停（第 ' + this.shows + ' 次显示本页）'
+    }
+  },
+
+  resume() {
+    router.push({ uri: '/game' })
+  },
+
+  /**
+   * 回到标题页时立刻存一次。
+   * 与"退出应用时存"的区别：这时进程确定还活着，异步写入有时间落地。
+   */
+  saveOnReturn(store) {
+    const d = new Date()
+    const t = ('0' + d.getHours()).slice(-2) + ':' +
+              ('0' + d.getMinutes()).slice(-2) + ':' +
+              ('0' + d.getSeconds()).slice(-2)
+    this.savedAt = '保存中…'
+    try {
+      storage.set({
+        key: 'save',
+        value: JSON.stringify({ count: store.count, at: t }),
+        success: () => {
+          this.savedAt = '已自动保存 · 计数 ' + store.count + ' · ' + t
+        },
+        fail: (x, c) => {
+          this.savedAt = '保存失败 code=' + c
+        }
+      })
+    } catch (e) {
+      this.savedAt = '保存异常'
+    }
+  },
+
+  stackDepth() {
+    try {
+      if (router.getLength) {
+        return router.getLength()
+      }
+      if (router.getPages) {
+        return router.getPages().length
+      }
+    } catch (e) {}
+    return -1
+  },
+
+  /**
+   * 只在进程刚起来时读一次存档。
+   * 用来验证"应用被杀掉后，还能从 storage 恢复"。
+   */
+  restore() {
+    const store = getStore()
+    if (store.restored) {
+      return
+    }
+    store.restored = true
+    try {
+      storage.get({
+        key: 'save',
+        default: '',
+        success: (v) => {
+          if (!v) {
+            return
+          }
+          try {
+            const d = JSON.parse(v)
+            store.count = d.count || 0
+            this.count = store.count
+          } catch (e) {}
+        },
+        fail: () => {}
+      })
+    } catch (e) {}
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  padding: 12px;
+  background-color: #0a0a0c;
+}
+
+.h1 {
+  color: #ffffff;
+  font-weight: bold;
+  margin-bottom: 3px;
+}
+
+.sub {
+  color: #a8adb3;
+  margin-bottom: 10px;
+}
+
+.card {
+  width: 100%;
+  flex-direction: column;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border-width: 1px;
+  border-color: #26262b;
+  background-color: #141418;
+  margin-bottom: 12px;
+}
+
+.kv {
+  width: 100%;
+  height: 26px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.k {
+  color: #a8adb3;
+}
+
+.v {
+  color: #c4b5fd;
+  font-weight: bold;
+}
+
+.btn {
+  width: 100%;
+  height: 64px;
+  border-radius: 14px;
+  background-color: #7c3aed;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.btn-t {
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.save {
+  color: #6ee7a8;
+  margin-bottom: 6px;
+}
+
+.note {
+  color: #7f8a84;
+  margin-bottom: 4px;
+}
+
+.note2 {
+  color: #5b6470;
+}
+</style>

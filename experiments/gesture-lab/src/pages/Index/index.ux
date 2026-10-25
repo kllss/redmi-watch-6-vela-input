@@ -1,0 +1,219 @@
+<template>
+  <div class="page">
+
+    <text class="h1" style="font-size: 17px">手势实验 · A 页</text>
+    <text class="sub" style="font-size: 11px">点下方按钮进入 B 页，再测右滑</text>
+
+    <div class="card">
+      <div class="kv">
+        <text class="k" style="font-size: 12px">A onShow</text>
+        <text class="v" style="font-size: 14px">{{shows}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 12px">A onHide</text>
+        <text class="v" style="font-size: 14px">{{hides}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 12px">A onBackPress</text>
+        <text class="v" style="font-size: 14px">{{bp}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 12px">页面栈深度</text>
+        <text class="v" style="font-size: 14px">{{depth}}</text>
+      </div>
+    </div>
+
+    <div class="btn" onclick="goDetail">
+      <text class="btn-t" style="font-size: 15px">进入 B 页</text>
+    </div>
+
+    <div class="logbar">
+      <text class="k" style="font-size: 11px">事件日志</text>
+      <div class="mini" onclick="clearLog">
+        <text class="mini-t" style="font-size: 10px">清空</text>
+      </div>
+    </div>
+
+    <scroll class="logbox" scroll-y="true">
+      <div for="{{logs}}">
+        <text class="log" style="font-size: 10px">{{$item}}</text>
+      </div>
+    </scroll>
+
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+
+export default {
+  private: {
+    shows: 0,
+    hides: 0,
+    bp: 0,
+    depth: 1,
+    logs: []
+  },
+
+  onInit() {
+    this.log('A onInit')
+    this.depth = this.stackDepth()
+  },
+
+  onShow() {
+    this.shows = this.shows + 1
+    this.depth = this.stackDepth()
+    this.log('A onShow #' + this.shows + ' depth=' + this.depth)
+  },
+
+  onHide() {
+    this.hides = this.hides + 1
+    this.log('A onHide #' + this.hides)
+  },
+
+  onBackPress() {
+    this.bp = this.bp + 1
+    this.log('*** A onBackPress #' + this.bp + '（未消费，交给系统）')
+    return false
+  },
+
+  goDetail() {
+    this.log('push -> /detail')
+    try {
+      router.push({ uri: '/detail' })
+    } catch (e) {
+      this.log('push error ' + e)
+    }
+    setTimeout(() => {
+      this.depth = this.stackDepth()
+    }, 300)
+  },
+
+  stackDepth() {
+    try {
+      if (router.getLength) {
+        return router.getLength()
+      }
+      if (router.getPages) {
+        return router.getPages().length
+      }
+    } catch (e) {}
+    return -1
+  },
+
+  clearLog() {
+    this.logs = []
+  },
+
+  log(msg) {
+    const t = new Date()
+    const hh = ('0' + t.getHours()).slice(-2)
+    const mm = ('0' + t.getMinutes()).slice(-2)
+    const ss = ('0' + t.getSeconds()).slice(-2)
+    const line = hh + ':' + mm + ':' + ss + ' ' + msg
+    console.log('[glab] ' + line)
+    const next = [line].concat(this.logs)
+    if (next.length > 60) {
+      next.length = 60
+    }
+    this.logs = next
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  padding: 10px;
+  background-color: #0a0a0c;
+}
+
+.h1 {
+  color: #ffffff;
+  font-weight: bold;
+  margin-bottom: 2px;
+}
+
+.sub {
+  color: #9aa0a6;
+  margin-bottom: 6px;
+}
+
+.card {
+  width: 100%;
+  flex-direction: column;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border-width: 1px;
+  border-color: #26262b;
+  background-color: #141418;
+  margin-bottom: 8px;
+}
+
+.kv {
+  width: 100%;
+  height: 24px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.k {
+  color: #a8adb3;
+}
+
+.v {
+  color: #6ee7a8;
+  font-weight: bold;
+}
+
+.btn {
+  width: 100%;
+  height: 56px;
+  border-radius: 12px;
+  background-color: #1f6feb;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.btn-t {
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.logbar {
+  width: 100%;
+  height: 24px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.mini {
+  height: 22px;
+  padding-left: 10px;
+  padding-right: 10px;
+  border-radius: 6px;
+  background-color: #26262b;
+  justify-content: center;
+  align-items: center;
+}
+
+.mini-t {
+  color: #ffffff;
+}
+
+.logbox {
+  width: 100%;
+  flex: 1;
+}
+
+.log {
+  color: #d0d4d8;
+  margin-bottom: 2px;
+}
+</style>

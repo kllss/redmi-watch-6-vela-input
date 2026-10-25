@@ -1,0 +1,40 @@
+<script>
+import storage from '@system.storage'
+
+/**
+ * app.ux — 应用级生命周期打点
+ *
+ * 目的：判断"右滑返回"到底是页面被销毁、还是整个应用被结束。
+ * 每个点都尝试写一次 storage，下次启动能看到哪些点真的跑过。
+ */
+function mark(key) {
+  try {
+    const d = new Date()
+    const t = ('0' + d.getHours()).slice(-2) + ':' +
+              ('0' + d.getMinutes()).slice(-2) + ':' +
+              ('0' + d.getSeconds()).slice(-2)
+    storage.set({ key: key, value: t })
+  } catch (e) {}
+}
+
+export default {
+  onCreate() {
+    console.log('[store] app onCreate')
+    mark('a_create')
+  },
+  onShow() {
+    console.log('[store] app onShow')
+  },
+  onHide() {
+    console.log('[store] app onHide')
+    mark('a_hide')
+  },
+  onDestroy() {
+    console.log('[store] app onDestroy')
+    mark('a_destroy')
+  },
+  onError(e) {
+    console.log('[store] app onError ' + e)
+  }
+}
+</script>

@@ -1,0 +1,288 @@
+<template>
+  <div class="page">
+
+    <text class="h1" style="font-size: 17px">B 页 · 请右滑</text>
+    <text class="sub" style="font-size: 11px">{{mode}}</text>
+
+    <!-- 手势测试区：贴左边缘一整条，边缘起手也落在里面 -->
+    <div class="pad"
+         ontouchstart="tStart"
+         ontouchmove="tMove"
+         ontouchend="tEnd">
+      <text class="pad-t" style="font-size: 13px">在这个区域里向右滑</text>
+      <text class="pad-s" style="font-size: 10px">中间 5 次 + 最左边缘 5 次</text>
+    </div>
+
+    <div class="card">
+      <div class="kv">
+        <text class="k" style="font-size: 12px">touchstart</text>
+        <text class="v" style="font-size: 14px">{{ts}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 12px">touchend</text>
+        <text class="v" style="font-size: 14px">{{te}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 12px">最后一滑 dx / dy</text>
+        <text class="v" style="font-size: 14px">{{dx}} / {{dy}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 12px">B onBackPress</text>
+        <text class="v" style="font-size: 14px">{{bp}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 12px">栈深度</text>
+        <text class="v" style="font-size: 14px">{{depth}}</text>
+      </div>
+    </div>
+
+    <div class="btn" onclick="goBack">
+      <text class="btn-t" style="font-size: 15px">点按返回 A</text>
+    </div>
+
+    <scroll class="logbox" scroll-y="true">
+      <div for="{{logs}}">
+        <text class="log" style="font-size: 10px">{{$item}}</text>
+      </div>
+    </scroll>
+
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+
+export default {
+  private: {
+    mode: '对照组：B 页无 followHand',
+    ts: 0,
+    te: 0,
+    sx: 0,
+    sy: 0,
+    dx: '—',
+    dy: '—',
+    bp: 0,
+    depth: 2,
+    logs: []
+  },
+
+  onInit() {
+    this.log('B onInit')
+  },
+
+  onShow() {
+    this.depth = this.stackDepth()
+    this.log('B onShow depth=' + this.depth)
+  },
+
+  onBackPress() {
+    this.bp = this.bp + 1
+    this.log('*** B onBackPress #' + this.bp + '（未消费）')
+    return false
+  },
+
+  onDestroy() {
+    console.log('[glab] B onDestroy')
+  },
+
+  tStart(e) {
+    this.ts = this.ts + 1
+    const p = this.point(e, 'start')
+    if (p) {
+      this.sx = p.x
+      this.sy = p.y
+      this.log('start ' + p.x + ',' + p.y + ' (' + p.src + ')')
+    } else {
+      this.log('start (no xy)')
+    }
+  },
+
+  tMove(e) {
+    const p = this.point(e, 'move')
+    if (p && this.ts > 0) {
+      this.dx = p.x - this.sx
+      this.dy = p.y - this.sy
+    }
+  },
+
+  tEnd(e) {
+    this.te = this.te + 1
+    const p = this.point(e, 'end')
+    if (p) {
+      this.dx = p.x - this.sx
+      this.dy = p.y - this.sy
+      this.log('end dx=' + this.dx + ' dy=' + this.dy)
+    } else {
+      this.log('end (no xy)')
+    }
+  },
+
+  /**
+   * 触摸点坐标：Vela 不同版本可能给 touches/changedTouches，
+   * 字段也可能是 clientX / x / pageX，全部做兜底。
+   */
+  point(e, phase) {
+    if (!e) {
+      return null
+    }
+    let t = null
+    if (e.touches && e.touches.length) {
+      t = e.touches[0]
+    } else if (e.changedTouches && e.changedTouches.length) {
+      t = e.changedTouches[0]
+    } else {
+      t = e
+    }
+    if (!t) {
+      return null
+    }
+    const x = this.num(t.clientX, t.x, t.pageX)
+    const y = this.num(t.clientY, t.y, t.pageY)
+    if (x === null || y === null) {
+      return null
+    }
+    return { x: x, y: y, src: phase }
+  },
+
+  num() {
+    for (let i = 0; i < arguments.length; i++) {
+      const v = arguments[i]
+      if (typeof v === 'number' && !isNaN(v)) {
+        return Math.round(v)
+      }
+    }
+    return null
+  },
+
+  goBack() {
+    this.log('router.back()')
+    try {
+      router.back()
+    } catch (e) {
+      this.log('back error ' + e)
+    }
+  },
+
+  stackDepth() {
+    try {
+      if (router.getLength) {
+        return router.getLength()
+      }
+      if (router.getPages) {
+        return router.getPages().length
+      }
+    } catch (e) {}
+    return -1
+  },
+
+  log(msg) {
+    const t = new Date()
+    const hh = ('0' + t.getHours()).slice(-2)
+    const mm = ('0' + t.getMinutes()).slice(-2)
+    const ss = ('0' + t.getSeconds()).slice(-2)
+    const line = hh + ':' + mm + ':' + ss + ' ' + msg
+    console.log('[glab] ' + line)
+    const next = [line].concat(this.logs)
+    if (next.length > 60) {
+      next.length = 60
+    }
+    this.logs = next
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  padding: 10px;
+  background-color: #0a0a0c;
+}
+
+.h1 {
+  color: #ffffff;
+  font-weight: bold;
+  margin-bottom: 2px;
+}
+
+.sub {
+  color: #f2b544;
+  margin-bottom: 6px;
+}
+
+.pad {
+  width: 100%;
+  height: 130px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border-radius: 10px;
+  border-width: 1px;
+  border-color: #2f6b3a;
+  background-color: #0f1a12;
+  margin-bottom: 8px;
+}
+
+.pad-t {
+  color: #6ee7a8;
+}
+
+.pad-s {
+  color: #7f8a84;
+  margin-top: 3px;
+}
+
+.card {
+  width: 100%;
+  flex-direction: column;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border-width: 1px;
+  border-color: #26262b;
+  background-color: #141418;
+  margin-bottom: 8px;
+}
+
+.kv {
+  width: 100%;
+  height: 24px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.k {
+  color: #a8adb3;
+}
+
+.v {
+  color: #6ee7a8;
+  font-weight: bold;
+}
+
+.btn {
+  width: 100%;
+  height: 52px;
+  border-radius: 12px;
+  background-color: #26262b;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.btn-t {
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.logbox {
+  width: 100%;
+  flex: 1;
+}
+
+.log {
+  color: #d0d4d8;
+  margin-bottom: 2px;
+}
+</style>

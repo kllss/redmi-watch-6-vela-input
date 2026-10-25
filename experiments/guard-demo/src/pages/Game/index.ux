@@ -1,0 +1,305 @@
+<template>
+  <div class="page">
+
+    <text class="h1" style="font-size: 18px">游戏页</text>
+    <text class="sub" style="font-size: 11px">{{hint}}</text>
+
+    <text class="big" style="font-size: 60px">{{count}}</text>
+
+    <div class="card">
+      <div class="kv">
+        <text class="k" style="font-size: 11px">本页被创建</text>
+        <text class="v" style="font-size: 12px">{{inits}} 次</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">页面栈深度</text>
+        <text class="v" style="font-size: 12px">{{depth}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">上次保存</text>
+        <text class="v" style="font-size: 12px">{{savedAt}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">共享标记</text>
+        <text class="v" style="font-size: 12px">{{marks}}</text>
+      </div>
+    </div>
+
+    <div class="btn" onclick="add">
+      <text class="btn-t" style="font-size: 15px">+1（同时写存档）</text>
+    </div>
+
+    <div class="btn2" if="{{canBack}}" onclick="back">
+      <text class="btn2-t" style="font-size: 13px">软件返回（到暂停页）</text>
+    </div>
+
+    <div class="btn3" onclick="zero">
+      <text class="btn3-t" style="font-size: 12px">清零</text>
+    </div>
+
+    <text class="note" style="font-size: 10px">{{note}}</text>
+
+  </div>
+</template>
+
+<script>
+import router from '@system.router'
+import storage from '@system.storage'
+
+const STORE_KEY = '__klls_guard_store__'
+let localFallback = null
+
+function createStore() {
+  return {
+    count: 0,
+    gameInits: 0,
+    guardShows: 0,
+    entered: false,
+    restored: false,
+    inGame: false,
+    marks: []
+  }
+}
+
+/**
+ * 把 store 挂到宿主对象上，并"赋值后重新读取"确认真的挂上了。
+ * 有些运行时会把 global 对象冻结，赋值静默失败，直接 return host[KEY] 会拿到 undefined。
+ */
+function attach(host) {
+  if (!host) {
+    return null
+  }
+  if (!host[STORE_KEY]) {
+    try {
+      host[STORE_KEY] = createStore()
+    } catch (e) {}
+  }
+  return host[STORE_KEY] || null
+}
+
+function getStore() {
+  try {
+    const g = (typeof globalThis !== 'undefined') ? globalThis : null
+    const s = attach(g)
+    if (s) {
+      return s
+    }
+  } catch (e) {}
+  try {
+    const g = (typeof global !== 'undefined') ? global : null
+    const s = attach(g)
+    if (s) {
+      return s
+    }
+  } catch (e) {}
+  if (!localFallback) {
+    localFallback = createStore()
+  }
+  return localFallback
+}
+
+export default {
+  private: {
+    count: 0,
+    inits: 0,
+    depth: 1,
+    savedAt: '—',
+    canBack: false,
+    hint: '现在右滑，看会不会退出应用',
+    note: '',
+    marks: ''
+  },
+
+  onInit() {
+    const store = getStore()
+
+    store.gameInits = store.gameInits + 1
+    this.inits = store.gameInits
+    this.count = store.count
+    this.depth = this.stackDepth()
+    this.canBack = this.depth > 1
+    this.hint = this.canBack ? '右滑 → 应落到「已暂停」' : '栈底：右滑没有可返回的页面'
+    this.note = this.canBack ? '右滑后回到守卫页，计数应保持不变' : '观察右滑后应用是否退出'
+  },
+
+  onShow() {
+    const store = getStore()
+
+    store.inGame = true
+
+    store.marks = store.marks.concat(['G'])
+    if (store.marks.length > 12) {
+      store.marks = store.marks.slice(store.marks.length - 12)
+    }
+
+    this.marks = store.marks.join(' ')
+    this.count = store.count
+    this.depth = this.stackDepth()
+    this.canBack = this.depth > 1
+  },
+
+  onHide() {
+    this.save()
+  },
+
+  onDestroy() {
+    this.save()
+  },
+
+  onBackPress() {
+    console.log('[guard] game onBackPress')
+    return false
+  },
+
+  add() {
+    const store = getStore()
+    store.count = store.count + 1
+    this.count = store.count
+    this.save()
+  },
+
+  back() {
+    if (this.stackDepth() > 1) {
+      router.back()
+    }
+  },
+
+  zero() {
+    const store = getStore()
+    store.count = 0
+    this.count = 0
+    this.save()
+  },
+
+  save() {
+    const store = getStore()
+    const d = new Date()
+    const t = ('0' + d.getHours()).slice(-2) + ':' +
+              ('0' + d.getMinutes()).slice(-2) + ':' +
+              ('0' + d.getSeconds()).slice(-2)
+    this.savedAt = t
+    try {
+      storage.set({
+        key: 'save',
+        value: JSON.stringify({ count: store.count, at: t })
+      })
+    } catch (e) {}
+  },
+
+  stackDepth() {
+    try {
+      if (router.getLength) {
+        return router.getLength()
+      }
+      if (router.getPages) {
+        return router.getPages().length
+      }
+    } catch (e) {}
+    return -1
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  padding: 12px;
+  background-color: #0a0a0c;
+}
+
+.h1 {
+  color: #ffffff;
+  font-weight: bold;
+  margin-bottom: 3px;
+}
+
+.sub {
+  color: #c4b5fd;
+  margin-bottom: 4px;
+}
+
+.big {
+  color: #ffffff;
+  font-weight: bold;
+  text-align: center;
+  margin-top: 6px;
+  margin-bottom: 8px;
+}
+
+.card {
+  width: 100%;
+  flex-direction: column;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border-width: 1px;
+  border-color: #26262b;
+  background-color: #141418;
+  margin-bottom: 10px;
+}
+
+.kv {
+  width: 100%;
+  height: 26px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.k {
+  color: #a8adb3;
+}
+
+.v {
+  color: #c4b5fd;
+  font-weight: bold;
+}
+
+.btn {
+  width: 100%;
+  height: 60px;
+  border-radius: 14px;
+  background-color: #7c3aed;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.btn-t {
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.btn2 {
+  width: 100%;
+  height: 46px;
+  border-radius: 12px;
+  background-color: #26262b;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.btn2-t {
+  color: #d0d4d8;
+}
+
+.btn3 {
+  width: 100%;
+  height: 36px;
+  border-radius: 10px;
+  background-color: #1a1a1f;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.btn3-t {
+  color: #7f8a84;
+}
+
+.note {
+  color: #5b6470;
+}
+</style>

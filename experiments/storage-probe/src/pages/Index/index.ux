@@ -1,0 +1,365 @@
+<template>
+  <div class="page">
+
+    <text class="h1" style="font-size: 17px">存档探针</text>
+    <text class="sub" style="font-size: 11px">{{sOk}} · 第 {{boot}} 次启动</text>
+
+    <div class="card">
+      <div class="kv">
+        <text class="k" style="font-size: 11px">页面 onHide</text>
+        <text class="v" style="font-size: 12px">{{pHide}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">页面 onDestroy</text>
+        <text class="v" style="font-size: 12px">{{pDestroy}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">应用 onHide</text>
+        <text class="v" style="font-size: 12px">{{aHide}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">应用 onDestroy</text>
+        <text class="v" style="font-size: 12px">{{aDestroy}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">onBackPress</text>
+        <text class="v" style="font-size: 12px">{{backAt}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">上次主动写入</text>
+        <text class="v" style="font-size: 12px">{{setAt}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">4KB 写入耗时</text>
+        <text class="v" style="font-size: 12px">{{wMs}}</text>
+      </div>
+      <div class="kv">
+        <text class="k" style="font-size: 11px">读回长度</text>
+        <text class="v" style="font-size: 12px">{{wLen}}</text>
+      </div>
+    </div>
+
+    <div class="btn" onclick="testWrite">
+      <text class="btn-t" style="font-size: 14px">写 4KB 测试</text>
+    </div>
+
+    <div class="btn2" onclick="reset">
+      <text class="btn2-t" style="font-size: 13px">清空探针数据</text>
+    </div>
+
+    <div class="logbar">
+      <text class="k" style="font-size: 11px">日志</text>
+    </div>
+
+    <scroll class="logbox" scroll-y="true">
+      <div for="{{logs}}">
+        <text class="log" style="font-size: 10px">{{$item}}</text>
+      </div>
+    </scroll>
+
+  </div>
+</template>
+
+<script>
+import storage from '@system.storage'
+
+export default {
+  private: {
+    sOk: '检测中…',
+    boot: 0,
+    pHide: '—',
+    pDestroy: '—',
+    aHide: '—',
+    aDestroy: '—',
+    backAt: '—',
+    setAt: '—',
+    wMs: '—',
+    wLen: '—',
+    logs: []
+  },
+
+  onInit() {
+    this.log('page onInit')
+    this.bootSeq()
+  },
+
+  onShow() {
+    this.log('page onShow')
+    this.readMarkers()
+  },
+
+  onHide() {
+    this.log('page onHide')
+    this.write('p_hide', this.stamp())
+  },
+
+  onDestroy() {
+    console.log('[store] page onDestroy')
+    this.write('p_destroy', this.stamp())
+  },
+
+  onBackPress() {
+    this.log('*** page onBackPress')
+    this.backAt = this.stamp()
+    this.write('m_back', this.backAt)
+    return false
+  },
+
+  // ---------- 启动计数 ----------
+
+  bootSeq() {
+    try {
+      storage.get({
+        key: 'c_boot',
+        default: '0',
+        success: (v) => {
+          const n = parseInt(v, 10) || 0
+          this.boot = n + 1
+          this.sOk = '存储可用'
+          this.write('c_boot', String(this.boot))
+          this.write('m_boot', this.stamp())
+          this.readMarkers()
+          this.log('第 ' + this.boot + ' 次启动')
+        },
+        fail: (d, c) => {
+          this.sOk = '存储不可用 code=' + c
+          this.log('storage.get fail code=' + c)
+        }
+      })
+    } catch (e) {
+      this.sOk = '存储异常'
+      this.log('storage.get threw ' + e)
+    }
+  },
+
+  // ---------- 读回打点 ----------
+
+  readMarkers() {
+    this.readOne('p_hide', 'pHide')
+    this.readOne('p_destroy', 'pDestroy')
+    this.readOne('a_hide', 'aHide')
+    this.readOne('a_destroy', 'aDestroy')
+    this.readOne('m_back', 'backAt')
+    this.readOne('m_set', 'setAt')
+  },
+
+  readOne(key, field) {
+    try {
+      storage.get({
+        key: key,
+        default: '',
+        success: (v) => {
+          const s = v || '—'
+          if (field === 'pHide') {
+            this.pHide = s
+          } else if (field === 'pDestroy') {
+            this.pDestroy = s
+          } else if (field === 'aHide') {
+            this.aHide = s
+          } else if (field === 'aDestroy') {
+            this.aDestroy = s
+          } else if (field === 'backAt') {
+            this.backAt = s
+          } else if (field === 'setAt') {
+            this.setAt = s
+          }
+        },
+        fail: () => {}
+      })
+    } catch (e) {}
+  },
+
+  // ---------- 写入测试 ----------
+
+  testWrite() {
+    const payload = new Array(4097).join('x') // 4096 个字符
+    const t0 = new Date().getTime()
+    try {
+      storage.set({
+        key: 'blob',
+        value: payload,
+        success: () => {
+          const ms = new Date().getTime() - t0
+          this.wMs = ms + ' ms'
+          const now = this.stamp()
+          this.setAt = now
+          this.write('m_set', now)
+          this.log('4KB 写入成功 ' + ms + 'ms')
+          this.verify(payload.length)
+        },
+        fail: (d, c) => {
+          this.wMs = '失败 code=' + c
+          this.log('4KB 写入失败 code=' + c)
+        }
+      })
+    } catch (e) {
+      this.wMs = '异常'
+      this.log('4KB 写入异常 ' + e)
+    }
+  },
+
+  verify(expect) {
+    try {
+      storage.get({
+        key: 'blob',
+        default: '',
+        success: (v) => {
+          const len = v ? v.length : 0
+          this.wLen = len + ' / ' + expect
+          this.log('读回 ' + len + ' 字符' + (len === expect ? '（一致）' : '（不一致）'))
+        },
+        fail: (d, c) => {
+          this.wLen = '读失败 ' + c
+        }
+      })
+    } catch (e) {
+      this.wLen = '读异常'
+    }
+  },
+
+  reset() {
+    const keys = ['c_boot', 'm_boot', 'p_hide', 'p_destroy', 'a_hide', 'a_destroy', 'm_back', 'm_set', 'blob']
+    for (let i = 0; i < keys.length; i++) {
+      try {
+        storage.delete({ key: keys[i] })
+      } catch (e) {}
+    }
+    this.boot = 0
+    this.pHide = '—'
+    this.pDestroy = '—'
+    this.aHide = '—'
+    this.aDestroy = '—'
+    this.backAt = '—'
+    this.setAt = '—'
+    this.wMs = '—'
+    this.wLen = '—'
+    this.log('已清空探针数据')
+  },
+
+  // ---------- 工具 ----------
+
+  write(key, value) {
+    try {
+      storage.set({
+        key: key,
+        value: String(value),
+        fail: (d, c) => this.log('写入 ' + key + ' 失败 code=' + c)
+      })
+    } catch (e) {
+      this.log('写入 ' + key + ' 异常')
+    }
+  },
+
+  stamp() {
+    const d = new Date()
+    return ('0' + d.getHours()).slice(-2) + ':' +
+           ('0' + d.getMinutes()).slice(-2) + ':' +
+           ('0' + d.getSeconds()).slice(-2)
+  },
+
+  log(msg) {
+    const line = this.stamp() + ' ' + msg
+    console.log('[store] ' + line)
+    const next = [line].concat(this.logs)
+    if (next.length > 40) {
+      next.length = 40
+    }
+    this.logs = next
+  }
+}
+</script>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  padding: 10px;
+  background-color: #0a0a0c;
+}
+
+.h1 {
+  color: #ffffff;
+  font-weight: bold;
+  margin-bottom: 2px;
+}
+
+.sub {
+  color: #6ee7a8;
+  margin-bottom: 6px;
+}
+
+.card {
+  width: 100%;
+  flex-direction: column;
+  padding: 5px 10px;
+  border-radius: 10px;
+  border-width: 1px;
+  border-color: #26262b;
+  background-color: #141418;
+  margin-bottom: 6px;
+}
+
+.kv {
+  width: 100%;
+  height: 21px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.k {
+  color: #a8adb3;
+}
+
+.v {
+  color: #6ee7a8;
+  font-weight: bold;
+}
+
+.btn {
+  width: 100%;
+  height: 48px;
+  border-radius: 12px;
+  background-color: #1f6feb;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.btn-t {
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.btn2 {
+  width: 100%;
+  height: 36px;
+  border-radius: 10px;
+  background-color: #26262b;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.btn2-t {
+  color: #d0d4d8;
+}
+
+.logbar {
+  width: 100%;
+  height: 20px;
+  flex-direction: row;
+  align-items: center;
+}
+
+.logbox {
+  width: 100%;
+  flex: 1;
+}
+
+.log {
+  color: #d0d4d8;
+  margin-bottom: 2px;
+}
+</style>
